@@ -40,9 +40,7 @@
       margin-bottom: 1rem;
     }
 
-    .score-item {
-      text-align: center;
-    }
+    .score-item { text-align: center; }
 
     .score-label {
       font-size: 0.75rem;
@@ -66,6 +64,7 @@
       border: 2px solid #4ecca3;
       box-shadow: 0 0 30px rgba(78, 204, 163, 0.3), inset 0 0 30px rgba(0, 0, 0, 0.5);
       background: #0d0d1a;
+      max-width: calc(100vw - 1rem);
     }
 
     #overlay {
@@ -75,51 +74,54 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: rgba(13, 13, 26, 0.88);
+      background: rgba(13, 13, 26, 0.92);
       border-radius: 2px;
+      overflow-y: auto;
+      padding: 0.75rem 0.5rem;
     }
 
     #overlay h2 {
       font-size: 2rem;
       color: #4ecca3;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4rem;
       letter-spacing: 0.1em;
     }
 
     #overlay > p {
       color: #aaa;
-      margin-bottom: 0.5rem;
-      font-size: 0.9rem;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
     }
 
     #overlay .final-score {
-      font-size: 1.1rem;
+      font-size: 1rem;
       color: #e0e0e0;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4rem;
     }
 
     #overlay .new-hs {
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       color: #ffcc32;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4rem;
     }
 
     #overlay .try-again {
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       color: #aaa;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.4rem;
     }
 
     button {
       background: transparent;
       border: 2px solid #4ecca3;
       color: #4ecca3;
-      padding: 0.6rem 2rem;
+      padding: 0.5rem 1.8rem;
       font-size: 1rem;
       font-family: inherit;
       letter-spacing: 0.1em;
       cursor: pointer;
       transition: background 0.2s, color 0.2s;
+      flex-shrink: 0;
     }
 
     button:hover {
@@ -130,9 +132,9 @@
     .settings {
       display: flex;
       flex-direction: column;
-      gap: 0.4rem;
-      margin: 0.8rem 0 1rem;
-      width: 14rem;
+      gap: 0.35rem;
+      margin: 0.6rem 0 0.8rem;
+      width: 15rem;
     }
 
     .setting-row {
@@ -143,8 +145,9 @@
     }
 
     .setting-row label {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: #888;
+      white-space: nowrap;
     }
 
     .setting-row select {
@@ -153,9 +156,9 @@
       color: #4ecca3;
       padding: 0.2rem 0.4rem;
       font-family: inherit;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       cursor: pointer;
-      min-width: 7rem;
+      min-width: 8rem;
     }
 
     #controls {
@@ -166,7 +169,6 @@
       line-height: 1.8;
     }
 
-    /* Mobile D-Pad */
     #dpad {
       display: none;
       margin-top: 1.5rem;
@@ -236,24 +238,44 @@
 
   <script>
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const overlay = document.getElementById('overlay');
-    const scoreEl = document.getElementById('score');
+    const ctx    = canvas.getContext('2d');
+    const overlay     = document.getElementById('overlay');
+    const scoreEl     = document.getElementById('score');
     const highscoreEl = document.getElementById('highscore');
-    const levelEl = document.getElementById('level');
+    const levelEl     = document.getElementById('level');
 
     const GRID = 20;
-    const COLS = canvas.width / GRID;
-    const ROWS = canvas.height / GRID;
+    let COLS = canvas.width  / GRID;
+    let ROWS = canvas.height / GRID;
+
+    // speed options: interval in ms (lower = faster)
+    const SPEEDS = [
+      { v: 400, l: 'Gemütlich'   },
+      { v: 280, l: 'Sehr langsam'},
+      { v: 180, l: 'Langsam'     },
+      { v: 110, l: 'Mittel'      },
+      { v: 70,  l: 'Normal'      },
+      { v: 45,  l: 'Schnell'     },
+      { v: 25,  l: 'Extrem'      },
+    ];
+
+    // map sizes: canvas px → cells = size/GRID
+    const MAPS = [
+      { v: 200, l: 'Klein  (10×10)'  },
+      { v: 300, l: 'Mittel (15×15)'  },
+      { v: 400, l: 'Normal (20×20)'  },
+      { v: 500, l: 'Groß   (25×25)'  },
+    ];
 
     let snake, dir, nextDir, foods, bonus, score, level, paused, gameLoop, bonusTimer;
-    let currentSpeed = 80;
-    let currentApples = 1;
+    let currentSpeed   = 70;
+    let currentApples  = 1;
+    let currentMapSize = 400;
 
-    // --- Highscore helpers (per speed+apples combination) ---
+    // --- Highscore (keyed per speed + apples + mapSize) ---
 
     function hsKey() {
-      return `snakeHS_${currentSpeed}_${currentApples}`;
+      return `snakeHS_${currentSpeed}_${currentApples}_${currentMapSize}`;
     }
 
     function getHighscore() {
@@ -272,20 +294,17 @@
       highscoreEl.textContent = getHighscore();
     }
 
-    // --- Overlay / settings HTML ---
+    // --- Settings UI ---
 
     function settingsHTML() {
-      const speeds = [
-        { v: 120, l: 'Langsam' },
-        { v: 80,  l: 'Normal'  },
-        { v: 50,  l: 'Schnell' },
-        { v: 30,  l: 'Extrem'  },
-      ];
-      const speedOpts = speeds.map(s =>
+      const speedOpts = SPEEDS.map(s =>
         `<option value="${s.v}"${currentSpeed === s.v ? ' selected' : ''}>${s.l}</option>`
       ).join('');
       const appleOpts = [1,2,3,4,5,6].map(n =>
         `<option value="${n}"${currentApples === n ? ' selected' : ''}>${n}</option>`
+      ).join('');
+      const mapOpts = MAPS.map(m =>
+        `<option value="${m.v}"${currentMapSize === m.v ? ' selected' : ''}>${m.l}</option>`
       ).join('');
       return `
         <div class="settings">
@@ -297,6 +316,10 @@
             <label for="sel-apples">Anzahl &Auml;pfel</label>
             <select id="sel-apples">${appleOpts}</select>
           </div>
+          <div class="setting-row">
+            <label for="sel-map">Kartengr&ouml;&szlig;e</label>
+            <select id="sel-map">${mapOpts}</select>
+          </div>
         </div>`;
     }
 
@@ -307,6 +330,10 @@
       });
       document.getElementById('sel-apples').addEventListener('change', e => {
         currentApples = parseInt(e.target.value);
+        updateHighscoreDisplay();
+      });
+      document.getElementById('sel-map').addEventListener('change', e => {
+        currentMapSize = parseInt(e.target.value);
         updateHighscoreDisplay();
       });
     }
@@ -362,20 +389,30 @@
       bonusTimer = setTimeout(() => { bonus = null; }, 7000);
     }
 
+    function levelInterval() {
+      const step = Math.max(3, Math.floor(currentSpeed / 15));
+      return Math.max(20, currentSpeed - (level - 1) * step);
+    }
+
     function initGame() {
+      canvas.width  = currentMapSize;
+      canvas.height = currentMapSize;
+      COLS = currentMapSize / GRID;
+      ROWS = currentMapSize / GRID;
+
       const mid = Math.floor(COLS / 2);
       snake = [
         { x: mid,     y: Math.floor(ROWS / 2) },
         { x: mid - 1, y: Math.floor(ROWS / 2) },
         { x: mid - 2, y: Math.floor(ROWS / 2) },
       ];
-      dir = { x: 1, y: 0 };
+      dir     = { x: 1, y: 0 };
       nextDir = { x: 1, y: 0 };
-      score = 0;
-      level = 1;
+      score  = 0;
+      level  = 1;
       paused = false;
-      bonus = null;
-      foods = [];
+      bonus  = null;
+      foods  = [];
       clearTimeout(bonusTimer);
       scoreEl.textContent = 0;
       levelEl.textContent = 1;
@@ -383,16 +420,13 @@
     }
 
     function drawRoundedCell(x, y, color, glowColor) {
-      const px = x * GRID + 1;
-      const py = y * GRID + 1;
+      const px   = x * GRID + 1;
+      const py   = y * GRID + 1;
       const size = GRID - 2;
       ctx.beginPath();
       ctx.roundRect(px, py, size, size, 4);
       ctx.fillStyle = color;
-      if (glowColor) {
-        ctx.shadowBlur = 14;
-        ctx.shadowColor = glowColor;
-      }
+      if (glowColor) { ctx.shadowBlur = 14; ctx.shadowColor = glowColor; }
       ctx.fill();
       ctx.shadowBlur = 0;
     }
@@ -400,9 +434,8 @@
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Grid lines
       ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-      ctx.lineWidth = 0.5;
+      ctx.lineWidth   = 0.5;
       for (let x = 0; x <= COLS; x++) {
         ctx.beginPath(); ctx.moveTo(x * GRID, 0); ctx.lineTo(x * GRID, canvas.height); ctx.stroke();
       }
@@ -410,18 +443,13 @@
         ctx.beginPath(); ctx.moveTo(0, y * GRID); ctx.lineTo(canvas.width, y * GRID); ctx.stroke();
       }
 
-      // Bonus food
       if (bonus) {
         const pulse = 0.6 + 0.4 * Math.sin(Date.now() / 150);
         drawRoundedCell(bonus.x, bonus.y, `rgba(255, 200, 50, ${pulse})`, '#ffcc32');
       }
 
-      // Regular food items
-      for (const f of foods) {
-        drawRoundedCell(f.x, f.y, '#ff4d6d', '#ff4d6d');
-      }
+      for (const f of foods) drawRoundedCell(f.x, f.y, '#ff4d6d', '#ff4d6d');
 
-      // Snake body
       for (let i = snake.length - 1; i >= 0; i--) {
         const t = 1 - i / snake.length;
         const g = Math.floor(160 + 44 * t);
@@ -429,17 +457,15 @@
         drawRoundedCell(snake[i].x, snake[i].y, `rgb(30, ${g}, ${b})`, i === 0 ? '#4ecca3' : null);
       }
 
-      // Eyes on head
       const head = snake[0];
       ctx.fillStyle = '#0d0d1a';
-      const eyeSize = 3;
       let e1, e2;
       if      (dir.x === 1)  { e1 = [head.x*GRID+13, head.y*GRID+5];  e2 = [head.x*GRID+13, head.y*GRID+13]; }
       else if (dir.x === -1) { e1 = [head.x*GRID+5,  head.y*GRID+5];  e2 = [head.x*GRID+5,  head.y*GRID+13]; }
       else if (dir.y === -1) { e1 = [head.x*GRID+5,  head.y*GRID+5];  e2 = [head.x*GRID+13, head.y*GRID+5];  }
       else                   { e1 = [head.x*GRID+5,  head.y*GRID+13]; e2 = [head.x*GRID+13, head.y*GRID+13]; }
-      ctx.fillRect(e1[0], e1[1], eyeSize, eyeSize);
-      ctx.fillRect(e2[0], e2[1], eyeSize, eyeSize);
+      ctx.fillRect(e1[0], e1[1], 3, 3);
+      ctx.fillRect(e2[0], e2[1], 3, 3);
     }
 
     function tick() {
@@ -463,7 +489,7 @@
           level++;
           levelEl.textContent = level;
           clearInterval(gameLoop);
-          gameLoop = setInterval(tick, Math.max(30, currentSpeed - (level - 1) * 8));
+          gameLoop = setInterval(tick, levelInterval());
         }
         if (Math.random() < 0.25 && !bonus) spawnBonus();
       } else if (bonus && head.x === bonus.x && head.y === bonus.y) {
@@ -476,15 +502,15 @@
       if (!grew) snake.pop();
 
       scoreEl.textContent = score;
-      const hs = getHighscore();
-      if (score > hs) highscoreEl.textContent = score;
+      if (score > getHighscore()) highscoreEl.textContent = score;
 
       draw();
     }
 
     function startGame() {
-      currentSpeed = parseInt(document.getElementById('sel-speed')?.value ?? currentSpeed);
-      currentApples = parseInt(document.getElementById('sel-apples')?.value ?? currentApples);
+      currentSpeed   = parseInt(document.getElementById('sel-speed')?.value  ?? currentSpeed);
+      currentApples  = parseInt(document.getElementById('sel-apples')?.value ?? currentApples);
+      currentMapSize = parseInt(document.getElementById('sel-map')?.value    ?? currentMapSize);
       initGame();
       overlay.style.display = 'none';
       clearInterval(gameLoop);
@@ -520,7 +546,7 @@
       if (e.key === 'p' || e.key === 'P') {
         if (overlay.style.display !== 'none') return;
         if (paused) {
-          gameLoop = setInterval(tick, Math.max(30, currentSpeed - (level - 1) * 8));
+          gameLoop = setInterval(tick, levelInterval());
         } else {
           clearInterval(gameLoop);
           gameLoop = null;
@@ -547,7 +573,6 @@
       touchStart = null;
     }, { passive: true });
 
-    // Boot
     showStartOverlay();
   </script>
 </body>
